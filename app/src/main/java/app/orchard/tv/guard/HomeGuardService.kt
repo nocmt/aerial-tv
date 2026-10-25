@@ -44,12 +44,13 @@ import app.orchard.tv.system.SystemProbe
  * press on the TV detours through this service; some apps then see a press as held and move twice
  * (云视听小电视 on Xiaomi MiTV-MFTR0, reported by a user and gone once Aerial was uninstalled).
  *
- * Up to Android 6, where Xiaomi's PatchWall raises no accessibility event at all, the app in front
- * is also read from usage stats once a second (see foregroundCheck).
+ * On firmwares whose own launcher raises no accessibility event at all — Xiaomi's PatchWall up to
+ * Android 6, and Hisense VIDAA's launcher (聚好看) on the versions seen — the app in front is also
+ * read from usage stats once a second (see foregroundCheck).
  *
  * Both only act while Aerial is not the resolved HOME app; once it is, the system does the work.
- * The service reads window-change events and, up to Android 6, which app is in front; it never
- * reads screen content.
+ * The service reads window-change events and, where the launcher stays invisible to them, which
+ * app is in front; it never reads screen content.
  */
 class HomeGuardService : AccessibilityService() {
 
@@ -309,10 +310,14 @@ class HomeGuardService : AccessibilityService() {
         // stopped or accessibility switched off and on (MiTV4-ANSM0, issue #381).
         if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.M) {
             handler.postDelayed(deafCheck, DEAF_AFTER_MS)
-            handler.removeCallbacks(foregroundCheck)
-            if (usageStatsAllowed(this)) handler.post(foregroundCheck)
-            else Log.i(TAG, "usage stats not allowed; not watching the front by them")
         }
+        // Hisense VIDAA (the Vidda C1S projector, MT9669, Android 9) sends no window change for its
+        // own launcher (聚好看, com.jamdeo.tv.vod) to third-party accessibility services; events for
+        // other apps still arrive, so the binding is not deaf. Usage stats record its moves to the
+        // front as on PatchWall: watch them on every version, not only up to Android 6.
+        handler.removeCallbacks(foregroundCheck)
+        if (usageStatsAllowed(this)) handler.post(foregroundCheck)
+        else Log.i(TAG, "usage stats not allowed; not watching the front by them")
         if (!GuardSetup.isUserUnlocked(this)) {
             Log.i(TAG, "bound while user locked; deferred takeover until unlock")
             return
